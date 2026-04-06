@@ -2,6 +2,7 @@ const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:5001
 
 async function request(path, options = {}) {
   const response = await fetch(`${API_BASE_URL}${path}`, {
+    credentials: 'include',
     headers: {
       'Content-Type': 'application/json',
       ...(options.headers || {})
@@ -19,7 +20,9 @@ async function request(path, options = {}) {
     } catch {
       // Ignore JSON parsing errors for non-JSON responses.
     }
-    throw new Error(errorMessage)
+    const error = new Error(errorMessage)
+    error.status = response.status
+    throw error
   }
 
   if (response.status === 204) {
@@ -31,6 +34,21 @@ async function request(path, options = {}) {
 
 export const api = {
   getHealth: () => request('/api/health'),
+  getSession: () => request('/api/auth/me'),
+  register: (payload) =>
+    request('/api/auth/register', {
+      method: 'POST',
+      body: JSON.stringify(payload)
+    }),
+  login: (payload) =>
+    request('/api/auth/login', {
+      method: 'POST',
+      body: JSON.stringify(payload)
+    }),
+  logout: () =>
+    request('/api/auth/logout', {
+      method: 'POST'
+    }),
   getCourses: () => request('/api/courses'),
   createCourse: (payload) =>
     request('/api/courses', {
@@ -52,6 +70,7 @@ export const api = {
       method: 'POST',
       body: JSON.stringify({ hours_per_week: hoursPerWeek })
     }),
+  getPlanHistory: () => request('/api/plan/history'),
   generatePlan: (payload = {}) =>
     request('/api/plan/generate', {
       method: 'POST',

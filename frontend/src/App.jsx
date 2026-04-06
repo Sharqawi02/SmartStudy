@@ -17,9 +17,7 @@ import {
 } from 'lucide-react'
 
 import { API_BASE_URL, api } from './api/client'
-import HeroSection from './components/HeroSection'
-
-const SESSION_KEY = 'smartstudy_is_authenticated'
+import AuthScreen from './components/AuthScreen'
 const dateFormatter = new Intl.DateTimeFormat('sv-SE', {
   month: 'short',
   day: 'numeric'
@@ -34,6 +32,12 @@ const initialCourseForm = {
   name: '',
   difficulty: 'med',
   exam_date: ''
+}
+
+const initialAuthForm = {
+  full_name: '',
+  email: '',
+  password: ''
 }
 
 const difficultyMeta = {
@@ -84,6 +88,60 @@ function formatExamCountdown(daysLeft) {
   return `Om ${daysLeft} dagar`
 }
 
+function getItemDaysLeft(item) {
+  if (typeof item?.days_to_exam === 'number') {
+    return item.days_to_exam
+  }
+
+  if (typeof item?.weeks_to_exam === 'number') {
+    return item.weeks_to_exam * 7
+  }
+
+  return Number.POSITIVE_INFINITY
+}
+
+function formatPlanCountdown(daysLeft) {
+  if (daysLeft < 0) {
+    return `${Math.abs(daysLeft)} dagar sedan`
+  }
+
+  if (daysLeft === 0) {
+    return 'Tenta idag'
+  }
+
+  if (daysLeft === 1) {
+    return '1 dag kvar'
+  }
+
+  if (daysLeft < 14) {
+    return `${daysLeft} dagar kvar`
+  }
+
+  const weeksLeft = Math.ceil(daysLeft / 7)
+  return `${weeksLeft} ${weeksLeft === 1 ? 'vecka' : 'veckor'} kvar`
+}
+
+function formatAllocationValue(item) {
+  const hours =
+    typeof item?.display_hours === 'number'
+      ? item.display_hours.toFixed(1)
+      : (item?.hours_per_week ?? 0).toFixed(1)
+  const unit = item?.display_unit || 'h / vecka'
+  return `${hours} ${unit}`
+}
+
+function getAllocationLabel(item) {
+  return item?.display_label || 'Veckofördelning'
+}
+
+function getAllocationDetail(item, priority) {
+  if (item?.display_detail) {
+    return item.display_detail
+  }
+
+  return priority.text
+}
+
 function getHealthTone(message) {
   if (message.includes('Could not')) {
     return 'warning'
@@ -118,22 +176,23 @@ function getDifficultyBadge(difficulty) {
 
 function getPriorityMeta(item, index, totalHours) {
   const share = item.hours_per_week / Math.max(totalHours || 1, 1)
+  const daysLeft = getItemDaysLeft(item)
 
-  if (index === 0 || item.weeks_to_exam <= 1 || share >= 0.4) {
+  if (daysLeft <= 3 || index === 0 || share >= 0.45) {
     return {
       label: 'P1',
-      title: 'Högst prioritet',
+      title: 'Akut fokus',
       tone: 'danger',
-      text: 'Skydda flera fokuserade pass för den här kursen först.'
+      text: 'Lägg första passen här och håll annat på minimum tills tentan är avklarad.'
     }
   }
 
-  if (index === 1 || item.weeks_to_exam <= 3 || share >= 0.25) {
+  if (daysLeft <= 14 || index === 1 || share >= 0.2) {
     return {
       label: 'P2',
       title: 'Nästa fokus',
       tone: 'warning',
-      text: 'Behåll jämn progression efter att huvudfokus är säkrat.'
+      text: 'Håll kursen igång nu och öka trycket direkt efter närmaste tenta.'
     }
   }
 
@@ -145,7 +204,24 @@ function getPriorityMeta(item, index, totalHours) {
   }
 }
 
-function getCadenceMeta(hoursPerWeek) {
+function getCadenceMeta(item) {
+  const daysLeft = getItemDaysLeft(item)
+  const hoursPerWeek = item.hours_per_week
+
+  if (daysLeft <= 3) {
+    return {
+      label: 'Examspurt',
+      text: 'Prioritera aktiv repetition, gamla uppgifter och ett sista fokuserat pass före tentan.'
+    }
+  }
+
+  if (daysLeft <= 7) {
+    return {
+      label: 'Slutrevision',
+      text: 'Planera flera korta pass med återkallelse, begrepp och tidsatta övningar.'
+    }
+  }
+
   if (hoursPerWeek >= 4) {
     return {
       label: 'Djupfokus',
@@ -180,10 +256,12 @@ function StatCard({ icon: Icon, label, value, detail }) {
 }
 
 function App() {
-  const [isAuthenticated, setIsAuthenticated] = useState(
-    () => window.localStorage.getItem(SESSION_KEY) === 'true'
-  )
-
+  const [authStatus, setAuthStatus] = useState('checking')
+  const [authMode, setAuthMode] = useState('login')
+  const [currentUser, setCurrentUser] = useState(null)
+  const [authForm, setAuthForm] = useState(initialAuthForm)
+  const [authBusy, setAuthBusy] = useState(false)
+  const [authError, setAuthError] = useState('')
   const [healthMessage, setHealthMessage] = useState('Loading backend status...')
   const [courses, setCourses] = useState([])
   const [settings, setSettings] = useState(null)
@@ -232,21 +310,44 @@ function App() {
     }
 
     return [...plan.weekly_focus].sort(
-      (a, b) => b.hours_per_week - a.hours_per_week || a.weeks_to_exam - b.weeks_to_exam
+      (a, b) => b.hours_per_week - a.hours_per_week || getItemDaysLeft(a) - getItemDaysLeft(b)
     )
   }, [plan])
   const studySummary = nextExam
     ? `${nextExam.name} är närmast med ${formatExamCountdown(nextExam.days_to_exam).toLowerCase()}.`
     : 'Lägg till din första kurs för att börja bygga ett veckofokus.'
-  const heroPreviewItems = upcomingExams.slice(0, 3).map((course) => ({
-    id: course.id,
-    name: course.name,
-    detail: `${formatExamCountdown(course.days_to_exam)} • ${formatDate(course.exam_date)}`,
-    tone: getDifficultyBadge(course.difficulty).tone
-  }))
 
   function setBusyFlag(key, value) {
     setBusy((current) => ({ ...current, [key]: value }))
+  }
+
+  function clearDashboardState() {
+    setCourses([])
+    setSettings(null)
+    setPlan(null)
+    setPlanHistory([])
+    setError('')
+  }
+
+  function updateAuthField(field, value) {
+    setAuthForm((current) => ({ ...current, [field]: value }))
+  }
+
+  function switchAuthMode(nextMode) {
+    setAuthMode(nextMode)
+    setAuthError('')
+    setAuthForm(initialAuthForm)
+  }
+
+  function handleProtectedError(err, fallbackMessage) {
+    if (err?.status === 401) {
+      setCurrentUser(null)
+      setAuthStatus('unauthenticated')
+      clearDashboardState()
+      return
+    }
+
+    setError(err.message || fallbackMessage)
   }
 
   function startEditingCourse(course) {
@@ -272,6 +373,22 @@ function App() {
     }
   }
 
+  async function checkSession() {
+    setAuthStatus('checking')
+
+    try {
+      const data = await api.getSession()
+      setCurrentUser(data.user || null)
+      setAuthStatus('authenticated')
+    } catch (err) {
+      if (err.status !== 401) {
+        setAuthError(err.message || 'Failed to verify session')
+      }
+      setCurrentUser(null)
+      setAuthStatus('unauthenticated')
+    }
+  }
+
   async function loadCourses() {
     const data = await api.getCourses()
     setCourses(data.courses || [])
@@ -285,34 +402,81 @@ function App() {
     }
   }
 
+  async function loadPlanHistory() {
+    const data = await api.getPlanHistory()
+    const plans = data.plans || []
+    setPlanHistory(plans)
+    setPlan(plans[0] || null)
+  }
+
   async function refreshDashboard() {
     setError('')
     try {
-      await Promise.all([loadCourses(), loadSettings()])
+      await Promise.all([loadCourses(), loadSettings(), loadPlanHistory()])
     } catch (err) {
+      if (err.status === 401) {
+        setCurrentUser(null)
+        setAuthStatus('unauthenticated')
+        clearDashboardState()
+        return
+      }
       setError(err.message || 'Failed to load dashboard data')
     }
   }
 
   useEffect(() => {
     loadHealth()
-    refreshDashboard()
-  }, [isAuthenticated])
+    checkSession()
+  }, [])
 
-  function loginDemo() {
-    window.localStorage.setItem(SESSION_KEY, 'true')
-    setIsAuthenticated(true)
+  useEffect(() => {
+    if (authStatus === 'authenticated') {
+      refreshDashboard()
+      return
+    }
+
+    if (authStatus === 'unauthenticated') {
+      clearDashboardState()
+    }
+  }, [authStatus])
+
+  async function handleAuthSubmit(event) {
+    event.preventDefault()
+    setAuthBusy(true)
+    setAuthError('')
+
+    try {
+      const action = authMode === 'register' ? api.register : api.login
+      const payload =
+        authMode === 'register'
+          ? authForm
+          : {
+              email: authForm.email,
+              password: authForm.password
+            }
+      const data = await action(payload)
+      setCurrentUser(data.user || null)
+      setAuthStatus('authenticated')
+      setAuthForm(initialAuthForm)
+    } catch (err) {
+      setAuthError(err.message || 'Authentication failed')
+    } finally {
+      setAuthBusy(false)
+    }
   }
 
-  function logoutDemo() {
-    window.localStorage.removeItem(SESSION_KEY)
-    setIsAuthenticated(false)
+  async function handleLogout() {
+    try {
+      await api.logout()
+    } catch {
+      // Clear the local session state even if the backend session is already gone.
+    }
 
-    setCourses([])
-    setSettings(null)
-    setPlan(null)
-    setPlanHistory([])
-    setError('')
+    setCurrentUser(null)
+    setAuthStatus('unauthenticated')
+    setAuthError('')
+    setAuthForm(initialAuthForm)
+    clearDashboardState()
   }
 
   async function handleCreateCourse(event) {
@@ -325,7 +489,7 @@ function App() {
       setCourseForm(initialCourseForm)
       await loadCourses()
     } catch (err) {
-      setError(err.message || 'Failed to create course')
+      handleProtectedError(err, 'Failed to create course')
     } finally {
       setBusyFlag('createCourse', false)
     }
@@ -341,7 +505,7 @@ function App() {
       }
       await loadCourses()
     } catch (err) {
-      setError(err.message || 'Failed to delete course')
+      handleProtectedError(err, 'Failed to delete course')
     } finally {
       setBusyFlag('deleteCourseId', null)
     }
@@ -357,7 +521,7 @@ function App() {
       await loadCourses()
       cancelEditingCourse()
     } catch (err) {
-      setError(err.message || 'Failed to update course')
+      handleProtectedError(err, 'Failed to update course')
     } finally {
       setBusyFlag('updateCourseId', null)
     }
@@ -376,7 +540,7 @@ function App() {
       await api.updateSettings(normalizedHoursInput)
       await loadSettings()
     } catch (err) {
-      setError(err.message || 'Failed to update settings')
+      handleProtectedError(err, 'Failed to update settings')
     } finally {
       setBusyFlag('updateSettings', false)
     }
@@ -390,66 +554,40 @@ function App() {
       const data = await api.generatePlan()
       setPlan(data)
       setPlanHistory((current) => [
-        {
-          generated_at: data.generated_at,
-          hours_per_week: data.hours_per_week,
-          suggestion_text: data.suggestion_text,
-          weekly_focus: data.weekly_focus || []
-        },
-        ...current
+        data,
+        ...current.filter((entry) => entry.id !== data.id)
       ])
     } catch (err) {
-      setError(err.message || 'Failed to generate plan')
+      handleProtectedError(err, 'Failed to generate plan')
     } finally {
       setBusyFlag('generatePlan', false)
     }
   }
 
-  if (!isAuthenticated) {
+  if (authStatus === 'checking') {
     return (
-      <main className="landing-page">
-        <HeroSection
-          backendMessage={healthMessage}
-          onPrimaryAction={loginDemo}
-          hoursPerWeek={settings?.hours_per_week}
-          nextExamLabel={nextExam ? formatExamCountdown(nextExam.days_to_exam) : 'Ingen tenta ännu'}
-          courseCount={courses.length}
-          previewItems={heroPreviewItems}
-        />
-
-        <div className="container landing-sections">
-          <section id="overview" className="landing-card glass-panel">
-            <p className="landing-eyebrow">Overview</p>
-            <h2>En studieplanerare för verkliga veckor.</h2>
-            <p>
-              SmartStudy hjälper dig gå från lösa kurslistor till ett konkret veckofokus med
-              hänsyn till tentadatum, svårighetsgrad och faktisk tillgänglig tid.
-            </p>
-          </section>
-
-          <section id="workflow" className="landing-card glass-panel">
-            <p className="landing-eyebrow">Workflow</p>
-            <h2>Så fungerar flödet.</h2>
-            <ol className="landing-list">
-              <li>Lägg till kurser med svårighetsgrad och examensdag.</li>
-              <li>Välj hur många timmar du kan lägga varje vecka.</li>
-              <li>Generera en plan som fördelar tiden mellan kurserna.</li>
-              <li>Följ kommande examinationer och justera när veckan ändras.</li>
-            </ol>
-          </section>
-
-          <section id="features" className="landing-card glass-panel">
-            <p className="landing-eyebrow">MVP Features</p>
-            <h2>Det viktigaste finns redan i produkten.</h2>
-            <ul className="landing-list">
-              <li>Kursöversikt med tentadatum och prioritering.</li>
-              <li>Inställning för timmar per vecka.</li>
-              <li>AI-stödd plantext och veckofokus per kurs.</li>
-              <li>Historik över genererade studieplaner.</li>
-            </ul>
-          </section>
+      <main className="auth-page auth-page-loading">
+        <div className="container auth-loading-shell glass-panel">
+          <p className="landing-eyebrow">Checking Session</p>
+          <h1>SmartStudy förbereder din studentyta.</h1>
+          <p>Vi verifierar om du redan har en aktiv inloggning.</p>
         </div>
       </main>
+    )
+  }
+
+  if (authStatus !== 'authenticated') {
+    return (
+      <AuthScreen
+        mode={authMode}
+        form={authForm}
+        error={authError}
+        busy={authBusy}
+        healthMessage={healthMessage}
+        onFieldChange={updateAuthField}
+        onModeChange={switchAuthMode}
+        onSubmit={handleAuthSubmit}
+      />
     )
   }
 
@@ -461,17 +599,26 @@ function App() {
             <p className="landing-eyebrow">Study Cockpit</p>
             <h1>SmartStudy Dashboard</h1>
             <p className="dashboard-subtitle">
-              En samlad vy för dina kurser, tentor och veckoplanering.
+              {currentUser
+                ? `${currentUser.full_name} har en privat vy för kurser, tentor och veckoplanering.`
+                : 'En samlad vy för dina kurser, tentor och veckoplanering.'}
             </p>
           </div>
 
           <div className="dashboard-topbar-actions">
+            {currentUser ? (
+              <div className="dashboard-user-badge">
+                <BookOpen size={15} />
+                {currentUser.email}
+              </div>
+            ) : null}
+
             <div className={`hero-status hero-status-${healthTone}`}>
               <span className="hero-status-dot" />
               {healthMessage}
             </div>
 
-            <button type="button" className="btn-secondary dashboard-logout" onClick={logoutDemo}>
+            <button type="button" className="btn-secondary dashboard-logout" onClick={handleLogout}>
               <LogOut size={16} />
               Logga ut
             </button>
@@ -941,10 +1088,10 @@ function App() {
                               {difficulty.label}
                             </span>
                             <span className="dashboard-chip dashboard-chip-neutral">
-                              {item.hours_per_week} h / vecka
+                              {formatAllocationValue(item)}
                             </span>
                             <span className={`dashboard-chip dashboard-chip-${priority.tone}`}>
-                              {item.weeks_to_exam} veckor kvar
+                              {formatPlanCountdown(getItemDaysLeft(item))}
                             </span>
                           </div>
                         </article>
@@ -960,7 +1107,7 @@ function App() {
                       (item.hours_per_week / Math.max(plan.hours_per_week || 1, 1)) * 100
                     const allocationWidth = `${allocationPercent}%`
                     const priority = getPriorityMeta(item, index, plan.hours_per_week)
-                    const cadence = getCadenceMeta(item.hours_per_week)
+                    const cadence = getCadenceMeta(item)
 
                     return (
                       <article key={item.course_id} className="focus-card">
@@ -968,7 +1115,7 @@ function App() {
                           <div>
                             <h3>{item.course_name}</h3>
                             <p>
-                              {item.weeks_to_exam} veckor kvar • {formatDate(item.exam_date)}
+                              {formatPlanCountdown(getItemDaysLeft(item))} • {formatDate(item.exam_date)}
                             </p>
                           </div>
                           <div className="focus-card-badges">
@@ -991,9 +1138,9 @@ function App() {
 
                         <div className="focus-card-grid">
                           <div className="focus-card-detail">
-                            <span>Veckofördelning</span>
-                            <strong>{item.hours_per_week} h / vecka</strong>
-                            <p>{priority.text}</p>
+                            <span>{getAllocationLabel(item)}</span>
+                            <strong>{formatAllocationValue(item)}</strong>
+                            <p>{getAllocationDetail(item, priority)}</p>
                           </div>
                           <div className="focus-card-detail">
                             <span>Studietakt</span>
@@ -1003,7 +1150,7 @@ function App() {
                         </div>
 
                         <div className="focus-card-footer">
-                          <strong>{item.hours_per_week} h / vecka</strong>
+                          <strong>{formatAllocationValue(item)}</strong>
                           <span>{plan.hours_per_week > 0 ? allocationWidth : '0%'}</span>
                         </div>
                       </article>
@@ -1036,7 +1183,8 @@ function App() {
                   const topFocus = [...entry.weekly_focus]
                     .sort(
                       (a, b) =>
-                        b.hours_per_week - a.hours_per_week || a.weeks_to_exam - b.weeks_to_exam
+                        b.hours_per_week - a.hours_per_week ||
+                        getItemDaysLeft(a) - getItemDaysLeft(b)
                     )
                     .slice(0, 3)
 

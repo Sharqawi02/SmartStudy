@@ -39,7 +39,9 @@ def _build_plan_prompt(weekly_focus, hours_per_week, today_iso):
             (
                 f"- {item['course_name']}: {item['hours_per_week']} h/week, "
                 f"difficulty={item['difficulty']}, exam={item['exam_date']}, "
-                f"weeks_to_exam={item['weeks_to_exam']}"
+                f"days_to_exam={item['days_to_exam']}, weeks_to_exam={item['weeks_to_exam']}, "
+                f"allocation_mode={item['allocation_mode']}, display_hours={item['display_hours']}, "
+                f"display_unit={item['display_unit']}, recommended_hours_per_day={item['recommended_hours_per_day']}"
             )
         )
 
@@ -79,9 +81,13 @@ def generate_plan_suggestion(weekly_focus, hours_per_week, today_iso):
         "model": OPENAI_MODEL,
         "instructions": (
             "You write short, practical Swedish study-plan summaries for students. "
-            "Mention the most urgent courses by name, suggest a realistic weekly cadence, "
-            "and explain how to shift into revision near each exam. "
-            "Keep the answer under 120 words. No headings. No markdown bullets."
+            "Mention the most urgent courses by name, suggest a realistic sequence, "
+            "and explain when to shift focus from one course to the next. "
+            "If an exam is within 14 days, use exact days or dates, not generic phrases like week 1-2. "
+            "If one exam is only a few days away, clearly say to focus on that course first until the exam date, "
+            "and mention the total hours before the exam and approximate hours per day when provided. "
+            "then shift to the next course. Keep the answer under 120 words. "
+            "No headings. No markdown bullets."
         ),
         "input": _build_plan_prompt(weekly_focus, hours_per_week, today_iso),
         "max_output_tokens": 220,

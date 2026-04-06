@@ -16,6 +16,25 @@ OPENAI_MODEL = os.getenv("OPENAI_MODEL", "gpt-5.4-mini")
 OPENAI_API_URL = os.getenv("OPENAI_API_URL", "https://api.openai.com/v1/responses")
 OPENAI_ORGANIZATION = os.getenv("OPENAI_ORGANIZATION")
 OPENAI_PROJECT = os.getenv("OPENAI_PROJECT")
+APP_SECRET_KEY = os.getenv("APP_SECRET_KEY", "smartstudy-dev-secret-change-me")
+DEFAULT_HOURS_PER_WEEK = 8
+
+
+def _parse_bool(value, default=False):
+    if value is None:
+        return default
+    return value.strip().lower() in {"1", "true", "yes", "on"}
+
+
+FRONTEND_ORIGINS = [
+    origin.strip()
+    for origin in os.getenv(
+        "FRONTEND_ORIGINS",
+        "http://localhost:5173,http://127.0.0.1:5173",
+    ).split(",")
+    if origin.strip()
+]
+SESSION_COOKIE_SECURE = _parse_bool(os.getenv("SESSION_COOKIE_SECURE"), default=False)
 
 try:
     OPENAI_TIMEOUT_SECONDS = float(os.getenv("OPENAI_TIMEOUT_SECONDS", "30"))
