@@ -42,10 +42,15 @@ function getStatusTone(backendMessage) {
 export default function HeroSection({
   backendMessage,
   onPrimaryAction,
+  primaryActionLabel = 'Öppna dashboard',
   hoursPerWeek,
   nextExamLabel,
   courseCount,
-  previewItems
+  previewItems,
+  secondaryActionLabel = 'Så fungerar det',
+  secondaryActionHref = '#workflow',
+  onSecondaryAction,
+  previewFooterCopy = 'SmartStudy hämtar kurslistan, nästa tenta och veckobudget från databasen innan planen genereras.'
 }) {
   const statusTone = getStatusTone(backendMessage)
   const hoursLabel = typeof hoursPerWeek === 'number' ? hoursPerWeek : '--'
@@ -81,13 +86,23 @@ export default function HeroSection({
 
           <div className="hero-actions">
             <button type="button" className="btn-primary hero-button" onClick={onPrimaryAction}>
-              Öppna dashboard
+              {primaryActionLabel}
               <ArrowRight size={18} />
             </button>
 
-            <a href="#workflow" className="btn-secondary hero-button hero-link-button">
-              Så fungerar det
-            </a>
+            {onSecondaryAction ? (
+              <button
+                type="button"
+                className="btn-secondary hero-button hero-link-button"
+                onClick={onSecondaryAction}
+              >
+                {secondaryActionLabel}
+              </button>
+            ) : (
+              <a href={secondaryActionHref} className="btn-secondary hero-button hero-link-button">
+                {secondaryActionLabel}
+              </a>
+            )}
           </div>
 
           <div className="hero-highlights">
@@ -164,10 +179,7 @@ export default function HeroSection({
             )}
           </div>
 
-          <div className="hero-preview-footer">
-            SmartStudy hämtar kurslistan, nästa tenta och veckobudget från databasen innan
-            planen genereras.
-          </div>
+          <div className="hero-preview-footer">{previewFooterCopy}</div>
         </motion.aside>
       </div>
     </section>

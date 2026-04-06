@@ -18,6 +18,7 @@ import {
 
 import { API_BASE_URL, api } from './api/client'
 import AuthScreen from './components/AuthScreen'
+import HomePage from './components/HomePage'
 const dateFormatter = new Intl.DateTimeFormat('sv-SE', {
   month: 'short',
   day: 'numeric'
@@ -44,6 +45,20 @@ const difficultyMeta = {
   low: { label: 'Låg', tone: 'low' },
   med: { label: 'Medel', tone: 'medium' },
   high: { label: 'Hög', tone: 'high' }
+}
+
+function getPublicStateFromHash() {
+  const hash = window.location.hash.toLowerCase()
+
+  if (hash === '#register') {
+    return { view: 'auth', mode: 'register' }
+  }
+
+  if (hash === '#login') {
+    return { view: 'auth', mode: 'login' }
+  }
+
+  return { view: 'home', mode: 'login' }
 }
 
 function daysUntil(dateString) {
@@ -256,8 +271,10 @@ function StatCard({ icon: Icon, label, value, detail }) {
 }
 
 function App() {
+  const initialPublicState = getPublicStateFromHash()
   const [authStatus, setAuthStatus] = useState('checking')
-  const [authMode, setAuthMode] = useState('login')
+  const [publicView, setPublicView] = useState(initialPublicState.view)
+  const [authMode, setAuthMode] = useState(initialPublicState.mode)
   const [currentUser, setCurrentUser] = useState(null)
   const [authForm, setAuthForm] = useState(initialAuthForm)
   const [authBusy, setAuthBusy] = useState(false)
@@ -333,16 +350,32 @@ function App() {
     setAuthForm((current) => ({ ...current, [field]: value }))
   }
 
-  function switchAuthMode(nextMode) {
-    setAuthMode(nextMode)
+  function openHomeView() {
+    setPublicView('home')
     setAuthError('')
+
+    if (window.location.hash) {
+      window.history.pushState('', document.title, window.location.pathname + window.location.search)
+    }
+  }
+
+  function openAuthView(mode = 'login') {
+    setPublicView('auth')
+    setAuthMode(mode)
+    setAuthError('')
+    window.location.hash = mode === 'register' ? 'register' : 'login'
+  }
+
+  function switchAuthMode(nextMode) {
     setAuthForm(initialAuthForm)
+    openAuthView(nextMode)
   }
 
   function handleProtectedError(err, fallbackMessage) {
     if (err?.status === 401) {
       setCurrentUser(null)
       setAuthStatus('unauthenticated')
+      openAuthView('login')
       clearDashboardState()
       return
     }
@@ -417,6 +450,7 @@ function App() {
       if (err.status === 401) {
         setCurrentUser(null)
         setAuthStatus('unauthenticated')
+        openAuthView('login')
         clearDashboardState()
         return
       }
@@ -427,6 +461,18 @@ function App() {
   useEffect(() => {
     loadHealth()
     checkSession()
+  }, [])
+
+  useEffect(() => {
+    function syncPublicStateFromHash() {
+      const nextState = getPublicStateFromHash()
+      setPublicView(nextState.view)
+      setAuthMode(nextState.mode)
+      setAuthError('')
+    }
+
+    window.addEventListener('hashchange', syncPublicStateFromHash)
+    return () => window.removeEventListener('hashchange', syncPublicStateFromHash)
   }, [])
 
   useEffect(() => {
@@ -458,11 +504,19 @@ function App() {
       setCurrentUser(data.user || null)
       setAuthStatus('authenticated')
       setAuthForm(initialAuthForm)
+      openHomeView()
     } catch (err) {
       setAuthError(err.message || 'Authentication failed')
     } finally {
       setAuthBusy(false)
     }
+  }
+
+  function handleSocialAuth(provider) {
+    const providerLabel = provider === 'apple' ? 'Apple' : 'Google'
+    setAuthError(
+      `${providerLabel} sign-in visas nu i gränssnittet, men behöver fortfarande OAuth-nycklar och callback-konfiguration innan det kan fungera på riktigt.`
+    )
   }
 
   async function handleLogout() {
@@ -477,6 +531,7 @@ function App() {
     setAuthError('')
     setAuthForm(initialAuthForm)
     clearDashboardState()
+    openHomeView()
   }
 
   async function handleCreateCourse(event) {
@@ -577,6 +632,16 @@ function App() {
   }
 
   if (authStatus !== 'authenticated') {
+    if (publicView === 'home') {
+      return (
+        <HomePage
+          healthMessage={healthMessage}
+          onLogin={() => openAuthView('login')}
+          onRegister={() => openAuthView('register')}
+        />
+      )
+    }
+
     return (
       <AuthScreen
         mode={authMode}
@@ -584,8 +649,10 @@ function App() {
         error={authError}
         busy={authBusy}
         healthMessage={healthMessage}
+        onBackHome={openHomeView}
         onFieldChange={updateAuthField}
         onModeChange={switchAuthMode}
+        onSocialAuth={handleSocialAuth}
         onSubmit={handleAuthSubmit}
       />
     )

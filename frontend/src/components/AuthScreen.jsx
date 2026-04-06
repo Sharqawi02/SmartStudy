@@ -53,8 +53,10 @@ export default function AuthScreen({
   error,
   busy,
   healthMessage,
+  onBackHome,
   onFieldChange,
   onModeChange,
+  onSocialAuth,
   onSubmit
 }) {
   const statusTone = getStatusTone(healthMessage)
@@ -158,6 +160,10 @@ export default function AuthScreen({
               ? 'Skapa ett konto för att spara privata kurser, veckoplaner och studieinställningar.'
               : 'Logga in för att fortsätta till din personliga dashboard och planhistorik.'}
           </p>
+
+          <button type="button" className="auth-back-button" onClick={onBackHome}>
+            Till startsidan
+          </button>
 
           <div className="auth-mode-switch">
             <button
@@ -267,6 +273,28 @@ export default function AuthScreen({
               <ArrowRight size={18} />
             </button>
           </form>
+
+          <div className="auth-social-block">
+            <p className="auth-social-label">Or continue with</p>
+            <div className="auth-social-grid">
+              <button
+                type="button"
+                className="auth-social-button"
+                onClick={() => onSocialAuth('google')}
+              >
+                <span className="auth-social-mark">G</span>
+                Google
+              </button>
+              <button
+                type="button"
+                className="auth-social-button"
+                onClick={() => onSocialAuth('apple')}
+              >
+                <span className="auth-social-mark">A</span>
+                Apple
+              </button>
+            </div>
+          </div>
 
           <p className="auth-footer-note">
             {isRegister
