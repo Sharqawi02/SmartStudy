@@ -1,7 +1,8 @@
 from datetime import date, datetime
 
-from flask import Blueprint, jsonify, request
+from flask import Blueprint, current_app, jsonify, request
 
+from ai_client import AIPlanGenerationError, generate_plan_suggestion, is_ai_configured
 from db import get_connection
 from models import parse_json
 
@@ -35,6 +36,15 @@ def _fetch_hours_per_week():
             "SELECT hours_per_week FROM study_settings WHERE id = 1"
         ).fetchone()
     return row["hours_per_week"] if row else 0
+
+
+def _build_rule_based_suggestion(weekly_focus):
+    top_courses = ", ".join(item["course_name"] for item in weekly_focus[:2])
+    return (
+        f"Weeks 1-2: prioritize {top_courses}. "
+        "Weeks 3-4: keep cadence, review weak topics, and add one timed practice session. "
+        "Final 1-2 weeks before each exam: shift to revision and mock questions."
+    )
 
 
 @plan_bp.get("")
@@ -92,12 +102,20 @@ def generate_plan():
         )
 
     weekly_focus.sort(key=lambda item: item["exam_date"])
-    top_courses = ", ".join(item["course_name"] for item in weekly_focus[:2])
-    suggestion_text = (
-        f"Weeks 1-2: prioritize {top_courses}. "
-        "Weeks 3-4: keep cadence, review weak topics, and add one timed practice session. "
-        "Final 1-2 weeks before each exam: shift to revision and mock questions."
-    )
+    suggestion_text = _build_rule_based_suggestion(weekly_focus)
+    suggestion_source = "rule_based"
+
+    if is_ai_configured():
+        try:
+            suggestion_text = generate_plan_suggestion(
+                weekly_focus=weekly_focus,
+                hours_per_week=hours_per_week,
+                today_iso=date.today().isoformat(),
+            )
+            suggestion_source = "ai"
+        except AIPlanGenerationError as exc:
+            current_app.logger.warning("AI plan generation failed: %s", exc)
+            suggestion_source = "rule_based_fallback"
 
     return jsonify(
         {
@@ -105,5 +123,7 @@ def generate_plan():
             "hours_per_week": hours_per_week,
             "weekly_focus": weekly_focus,
             "suggestion_text": suggestion_text,
+            "suggestion_source": suggestion_source,
+            "ai_configured": is_ai_configured(),
         }
     )

@@ -1,4 +1,4 @@
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:5000'
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:5001'
 
 async function request(path, options = {}) {
   const response = await fetch(`${API_BASE_URL}${path}`, {
@@ -35,6 +35,11 @@ export const api = {
   createCourse: (payload) =>
     request('/api/courses', {
       method: 'POST',
+      body: JSON.stringify(payload)
+    }),
+  updateCourse: (id, payload) =>
+    request(`/api/courses/${id}`, {
+      method: 'PUT',
       body: JSON.stringify(payload)
     }),
   deleteCourse: (id) =>

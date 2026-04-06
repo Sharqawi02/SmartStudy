@@ -24,21 +24,17 @@ def create_course():
         return jsonify({"error": error}), 400
 
     with get_connection() as conn:
-        cursor = conn.execute(
+        row = conn.execute(
             """
             INSERT INTO courses (name, difficulty, exam_date)
-            VALUES (?, ?, ?)
+            VALUES (%s, %s, %s)
+            RETURNING id, name, difficulty, exam_date
             """,
             (
                 payload["name"].strip(),
                 payload["difficulty"],
                 payload["exam_date"],
             ),
-        )
-
-        row = conn.execute(
-            "SELECT id, name, difficulty, exam_date FROM courses WHERE id = ?",
-            (cursor.lastrowid,),
         ).fetchone()
 
     return jsonify({"course": serialize_course(row)}), 201
@@ -59,7 +55,7 @@ def update_course(course_id):
     if not update_fields:
         return jsonify({"error": "No valid updatable fields provided"}), 400
 
-    set_clause = ", ".join(f"{field} = ?" for field in update_fields)
+    set_clause = ", ".join(f"{field} = %s" for field in update_fields)
     values = [
         payload[field].strip() if field == "name" else payload[field]
         for field in update_fields
@@ -68,14 +64,14 @@ def update_course(course_id):
 
     with get_connection() as conn:
         course_exists = conn.execute(
-            "SELECT id FROM courses WHERE id = ?", (course_id,)
+            "SELECT id FROM courses WHERE id = %s", (course_id,)
         ).fetchone()
         if not course_exists:
             return jsonify({"error": "Course not found"}), 404
 
-        conn.execute(f"UPDATE courses SET {set_clause} WHERE id = ?", values)
+        conn.execute(f"UPDATE courses SET {set_clause} WHERE id = %s", values)
         row = conn.execute(
-            "SELECT id, name, difficulty, exam_date FROM courses WHERE id = ?",
+            "SELECT id, name, difficulty, exam_date FROM courses WHERE id = %s",
             (course_id,),
         ).fetchone()
 
@@ -85,10 +81,10 @@ def update_course(course_id):
 @courses_bp.delete("/<int:course_id>")
 def delete_course(course_id):
     with get_connection() as conn:
-        row = conn.execute("SELECT id FROM courses WHERE id = ?", (course_id,)).fetchone()
+        row = conn.execute("SELECT id FROM courses WHERE id = %s", (course_id,)).fetchone()
         if not row:
             return jsonify({"error": "Course not found"}), 404
 
-        conn.execute("DELETE FROM courses WHERE id = ?", (course_id,))
+        conn.execute("DELETE FROM courses WHERE id = %s", (course_id,))
 
     return "", 204

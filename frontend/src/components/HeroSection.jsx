@@ -9,12 +9,6 @@ import {
   Sparkles
 } from 'lucide-react'
 
-const previewItems = [
-  { name: 'Matematik', detail: '4 h den här veckan', tone: 'high' },
-  { name: 'Databaser', detail: '3 h den här veckan', tone: 'medium' },
-  { name: 'UX-design', detail: '2 h repetition', tone: 'low' }
-]
-
 const valuePoints = [
   {
     icon: CalendarDays,
@@ -45,8 +39,19 @@ function getStatusTone(backendMessage) {
   return 'healthy'
 }
 
-export default function HeroSection({ backendMessage, onPrimaryAction }) {
+export default function HeroSection({
+  backendMessage,
+  onPrimaryAction,
+  hoursPerWeek,
+  nextExamLabel,
+  courseCount,
+  previewItems
+}) {
   const statusTone = getStatusTone(backendMessage)
+  const hoursLabel = typeof hoursPerWeek === 'number' ? hoursPerWeek : '--'
+  const nextExam = nextExamLabel || 'Ingen tenta ännu'
+  const totalCourses = typeof courseCount === 'number' ? courseCount : 0
+  const hasPreviewItems = previewItems.length > 0
 
   return (
     <section className="hero">
@@ -108,7 +113,7 @@ export default function HeroSection({ backendMessage, onPrimaryAction }) {
         >
           <div className="hero-preview-header">
             <div>
-              <p className="hero-preview-label">Preview</p>
+              <p className="hero-preview-label">Live Preview</p>
               <h2>Veckofokus</h2>
             </div>
 
@@ -121,35 +126,47 @@ export default function HeroSection({ backendMessage, onPrimaryAction }) {
           <div className="hero-preview-summary">
             <div>
               <span>Timmar / vecka</span>
-              <strong>9</strong>
+              <strong>{hoursLabel}</strong>
             </div>
             <div>
               <span>Nästa tenta</span>
-              <strong>12 dagar</strong>
+              <strong>{nextExam}</strong>
             </div>
             <div>
               <span>Kurser i plan</span>
-              <strong>3</strong>
+              <strong>{totalCourses}</strong>
             </div>
           </div>
 
           <div className="hero-preview-list">
-            {previewItems.map((item) => (
-              <div key={item.name} className="hero-preview-item">
-                <div className={`hero-preview-pill hero-preview-pill-${item.tone}`}>
+            {hasPreviewItems ? (
+              previewItems.map((item) => (
+                <div key={item.id} className="hero-preview-item">
+                  <div className={`hero-preview-pill hero-preview-pill-${item.tone}`}>
+                    <BookOpen size={15} />
+                  </div>
+                  <div>
+                    <strong>{item.name}</strong>
+                    <p>{item.detail}</p>
+                  </div>
+                </div>
+              ))
+            ) : (
+              <div className="hero-preview-item">
+                <div className="hero-preview-pill hero-preview-pill-low">
                   <BookOpen size={15} />
                 </div>
                 <div>
-                  <strong>{item.name}</strong>
-                  <p>{item.detail}</p>
+                  <strong>Inga kurser ännu</strong>
+                  <p>Lägg till din första kurs i dashboarden för att få en live-preview här.</p>
                 </div>
               </div>
-            ))}
+            )}
           </div>
 
           <div className="hero-preview-footer">
-            SmartStudy väger samman tentadatum, svårighetsgrad och dina tillgängliga timmar
-            innan planen genereras.
+            SmartStudy hämtar kurslistan, nästa tenta och veckobudget från databasen innan
+            planen genereras.
           </div>
         </motion.aside>
       </div>

@@ -34,10 +34,10 @@ def upsert_settings():
         conn.execute(
             """
             INSERT INTO study_settings (id, hours_per_week, created_at, updated_at)
-            VALUES (1, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
-            ON CONFLICT(id)
+            VALUES (1, %s, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+            ON CONFLICT (id)
             DO UPDATE SET
-                hours_per_week = excluded.hours_per_week,
+                hours_per_week = EXCLUDED.hours_per_week,
                 updated_at = CURRENT_TIMESTAMP
             """,
             (payload["hours_per_week"],),
