@@ -21,6 +21,7 @@ Optional AI variables for plan text generation:
 
 - `OPENAI_API_KEY`
 - `OPENAI_MODEL` (defaults to `gpt-5.4-mini`)
+- `OPENAI_PLAN_GENERATION_ENABLED` (defaults to `false`; set to `true` to call OpenAI)
 - `OPENAI_ORGANIZATION`
 - `OPENAI_PROJECT`
 - `OPENAI_TIMEOUT_SECONDS`

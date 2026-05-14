@@ -87,6 +87,18 @@ function formatLongDate(dateString) {
   return Number.isNaN(parsedDate.getTime()) ? dateString : longDateFormatter.format(parsedDate)
 }
 
+function formatSuggestionSource(source) {
+  if (source === 'ai') {
+    return 'OpenAI'
+  }
+
+  if (source === 'rule_based_fallback') {
+    return 'Lokal fallback'
+  }
+
+  return 'Lokal generator'
+}
+
 function formatExamCountdown(daysLeft) {
   if (daysLeft < 0) {
     return `${Math.abs(daysLeft)} dagar sedan`
@@ -1114,6 +1126,10 @@ function App() {
                   <div className="plan-summary-card">
                     <span>Allokerade timmar</span>
                     <strong>{totalAllocatedHours?.toFixed(1) ?? '0.0'} h</strong>
+                  </div>
+                  <div className="plan-summary-card">
+                    <span>Källa</span>
+                    <strong>{formatSuggestionSource(plan.suggestion_source)}</strong>
                   </div>
                 </div>
 

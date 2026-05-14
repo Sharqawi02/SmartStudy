@@ -26,6 +26,10 @@ def _parse_bool(value, default=False):
     return value.strip().lower() in {"1", "true", "yes", "on"}
 
 
+OPENAI_PLAN_GENERATION_ENABLED = _parse_bool(
+    os.getenv("OPENAI_PLAN_GENERATION_ENABLED"),
+    default=False,
+)
 FRONTEND_ORIGINS = [
     origin.strip()
     for origin in os.getenv(

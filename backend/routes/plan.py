@@ -1,10 +1,12 @@
 import json
+import random
 from datetime import date, datetime
 
 from flask import Blueprint, current_app, jsonify, request
 from psycopg.types.json import Jsonb
 
 from ai_client import AIPlanGenerationError, generate_plan_suggestion, is_ai_configured
+from config import OPENAI_PLAN_GENERATION_ENABLED
 from db import ensure_user_settings, get_connection
 from models import parse_json
 from session_auth import require_authenticated_user
@@ -155,18 +157,42 @@ def _build_rule_based_suggestion(weekly_focus, hours_per_week):
         else None
     )
 
-    sentences = [
+    opening_templates = [
         (
             f"Fram till {primary_exam_date}: lägg {primary_focus} tiden på "
             f"{primary_course['course_name']}."
-        )
+        ),
+        (
+            f"Starta veckan med {primary_course['course_name']} och håll "
+            f"{primary_focus} studietiden där fram till {primary_exam_date}."
+        ),
+        (
+            f"Prioritera {primary_course['course_name']} först eftersom tentan är "
+            f"{primary_exam_date}; ge kursen {primary_focus} tillgänglig tid."
+        ),
     ]
+
+    sentences = [random.choice(opening_templates)]
     if primary_daily_text:
         sentences.append(
-            f"Det motsvarar {primary_daily_text}, totalt {primary_hours_text}."
+            random.choice(
+                [
+                    f"Det motsvarar {primary_daily_text}, totalt {primary_hours_text}.",
+                    f"Sikta på {primary_daily_text}, alltså {primary_hours_text} innan tentan.",
+                    f"Bryt ner tiden till {primary_daily_text} så att du hinner {primary_hours_text}.",
+                ]
+            )
         )
     else:
-        sentences.append(f"Sikta på ungefär {primary_hours_text}.")
+        sentences.append(
+            random.choice(
+                [
+                    f"Sikta på ungefär {primary_hours_text}.",
+                    f"Planera in {primary_hours_text} och sprid passen över veckan.",
+                    f"Lägg upp veckan så att kursen får cirka {primary_hours_text}.",
+                ]
+            )
+        )
 
     if len(weekly_focus) > 1:
         secondary_course = weekly_focus[1]
@@ -177,33 +203,81 @@ def _build_rule_based_suggestion(weekly_focus, hours_per_week):
             else _pass_hint(secondary_course["hours_per_week"])
         )
         sentences.append(
-            (
-                f"Håll samtidigt {secondary_course['course_name']} igång med "
-                f"{secondary_effort} före {secondary_exam_date}."
+            random.choice(
+                [
+                    (
+                        f"Håll samtidigt {secondary_course['course_name']} igång med "
+                        f"{secondary_effort} före {secondary_exam_date}."
+                    ),
+                    (
+                        f"Ge {secondary_course['course_name']} ett underhållsspår med "
+                        f"{secondary_effort} inför {secondary_exam_date}."
+                    ),
+                    (
+                        f"Låt {secondary_course['course_name']} få {secondary_effort} så att "
+                        f"du inte tappar kursen före {secondary_exam_date}."
+                    ),
+                ]
             )
         )
         sentences.append(
-            (
-                f"Efter {primary_exam_date}: flytta huvudfokus till "
-                f"{secondary_course['course_name']} och gå över till aktiv repetition, "
-                "gamla uppgifter och snabba självtester."
+            random.choice(
+                [
+                    (
+                        f"Efter {primary_exam_date}: flytta huvudfokus till "
+                        f"{secondary_course['course_name']} och gå över till aktiv repetition, "
+                        "gamla uppgifter och snabba självtester."
+                    ),
+                    (
+                        f"När {primary_course['course_name']} är avklarad, byt tyngdpunkt till "
+                        f"{secondary_course['course_name']} med repetition och gamla uppgifter."
+                    ),
+                    (
+                        f"Direkt efter {primary_exam_date} bör {secondary_course['course_name']} "
+                        "bli huvudspåret med tidsatta övningar och självtester."
+                    ),
+                ]
             )
         )
     else:
         sentences.append(
-            (
-                f"Fördela cirka {hours_per_week} timmar den här veckan på repetition, "
-                "begreppsträning och en kort kontroll av svaga områden."
+            random.choice(
+                [
+                    (
+                        f"Fördela cirka {hours_per_week} timmar den här veckan på repetition, "
+                        "begreppsträning och en kort kontroll av svaga områden."
+                    ),
+                    (
+                        f"Använd veckans {hours_per_week} timmar till två tydliga block: "
+                        "förståelse först, sedan testfrågor."
+                    ),
+                    (
+                        f"Låt de {hours_per_week} timmarna gå till blandad repetition, "
+                        "övningsuppgifter och en kort genomgång av svaga delar."
+                    ),
+                ]
             )
         )
 
     if primary_course["days_to_exam"] <= 3:
         sentences.append(
-            "Sista dagarna före tentan: prioritera sammanfattningar, nyckelbegrepp och tidigare frågor framför nytt material."
+            random.choice(
+                [
+                    "Sista dagarna före tentan: prioritera sammanfattningar, nyckelbegrepp och tidigare frågor framför nytt material.",
+                    "När tentan är så nära bör du repetera, testa dig själv och undvika att öppna stora nya områden.",
+                    "Avsluta med korta repetitionspass, tidigare frågor och kontroll av de vanligaste misstagen.",
+                ]
+            )
         )
     else:
         sentences.append(
-            "När det återstår 1-2 dagar till varje tenta: växla från nyinlärning till repetition och tidsatta övningar."
+            random.choice(
+                [
+                    "När det återstår 1-2 dagar till varje tenta: växla från nyinlärning till repetition och tidsatta övningar.",
+                    "Spara de sista dagarna till repetition, minnestest och uppgifter under tidspress.",
+                    "Mot slutet ska fokus flyttas från nytt material till att kontrollera vad du faktiskt kan lösa själv.",
+                ]
+            )
         )
 
     return " ".join(sentences)
@@ -218,6 +292,7 @@ def _build_empty_plan_response(hours_per_week):
         "suggestion_text": "Inga kurser finns ännu. Lägg till minst en kurs för att skapa en studieplan.",
         "suggestion_source": "rule_based",
         "ai_configured": is_ai_configured(),
+        "ai_generation_enabled": OPENAI_PLAN_GENERATION_ENABLED,
     }
 
 
@@ -253,6 +328,7 @@ def _serialize_plan_row(row):
         "suggestion_text": row["suggestion_text"],
         "suggestion_source": row["suggestion_source"],
         "ai_configured": is_ai_configured(),
+        "ai_generation_enabled": OPENAI_PLAN_GENERATION_ENABLED,
     }
 
 
@@ -440,7 +516,7 @@ def generate_plan():
     suggestion_text = _build_rule_based_suggestion(weekly_focus, hours_per_week)
     suggestion_source = "rule_based"
 
-    if is_ai_configured():
+    if OPENAI_PLAN_GENERATION_ENABLED and is_ai_configured():
         try:
             suggestion_text = generate_plan_suggestion(
                 weekly_focus=weekly_focus,
